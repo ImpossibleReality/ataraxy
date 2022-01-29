@@ -8,7 +8,7 @@ pub struct Command {
     name: String,
     description: String,
     action: for<'a> fn(
-        super::context::SlashContext<'a>,
+        super::context::SlashContext,
         &'a [ApplicationCommandInteractionDataOption],
     ) -> Pin<Box<dyn Future<Output = Result<(), CommandError>> + Send + 'a>>,
 }

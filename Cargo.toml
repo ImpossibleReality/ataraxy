@@ -8,3 +8,7 @@ edition = "2018"
 [dependencies]
 serenity = {git = "https://github.com/serenity-rs/serenity", features = ["unstable_discord_api"]}
 unsafe-any = "0.4.2"
+ataraxy-macros = { path = "./macros" }
+
+[workspace]
+members = ["macros"]

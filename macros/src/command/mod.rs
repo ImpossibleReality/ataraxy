@@ -1,7 +1,6 @@
 mod actions;
 mod params;
 
-use anyhow::{Context, Result};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
@@ -39,7 +38,7 @@ fn extract_doc_comments(function: ItemFn) -> Option<String> {
     }
 }
 
-pub fn command(args: CommandArgs, function: ItemFn) -> Result<TokenStream> {
+pub fn command(args: CommandArgs, function: ItemFn) -> Result<TokenStream, syn::Error> {
     let description = match args.description {
         Some(desc) => desc,
         None => extract_doc_comments(function).ok_or(

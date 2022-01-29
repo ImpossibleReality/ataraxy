@@ -1,1 +1,1 @@
-pub struct SlashContext<'a> {}
+pub struct SlashContext {}
