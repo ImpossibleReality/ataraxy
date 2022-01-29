@@ -1,5 +1,7 @@
-use syn::ItemFn;
 use anyhow::Result;
+use syn::spanned::Spanned;
+use syn::FnArg::Typed;
+use syn::{ItemFn, Path};
 
 enum CommandArgType {
     String,
@@ -33,26 +35,32 @@ fn get_args(func: ItemFn) -> Result<CommandParameters, syn::Error> {
 
     for arg in func.sig.inputs.iter() {
         match arg {
-            Reciever(_) => return Err(syn::Error::new(arg.span(), "Cannot have a self argument in a command"))
+            Reciever(_) => {
+                return Err(syn::Error::new(
+                    arg.span(),
+                    "Cannot have a self argument in a command",
+                ))
+            }
             Typed(t) => match t {
-                    Path(p) => {
-                        if p.path.is_ident("Context") {
-                            if context {
-                                return Err(syn::Error::new(arg.span(), "Cannot have multiple context arguments in a command"));
-                            }
-                            context = true;
-                        } else {
-                            return Err(syn::Error::new(arg.span(), "Cannot have a non-Context argument in a command"))
+                Path(p) => {
+                    if p.path.is_ident("Context") {
+                        if context {
+                            return Err(syn::Error::new(
+                                arg.span(),
+                                "Cannot have multiple context arguments in a command",
+                            ));
                         }
-                    }
-                    _ => {
-                        return Err(syn::Error::new(arg.span(), "Unknown type in a command"))
+                        context = true;
+                    } else {
+                        return Err(syn::Error::new(
+                            arg.span(),
+                            "Cannot have a non-Context argument in a command",
+                        ));
                     }
                 }
+                _ => return Err(syn::Error::new(arg.span(), "Unknown type in a command")),
+            },
         }
     }
-    Ok(CommandParameters {
-        args,
-        context,
-    })
+    Ok(CommandParameters { args, context })
 }
