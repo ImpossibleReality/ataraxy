@@ -1,17 +1,22 @@
+use proc_macro2::Ident;
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 
-fn create_slash_command_action(num_args: u8) -> TokenStream {
-    let args: Vec<&str> = (1..num_args)
+pub fn create_slash_command_action(ctx: bool, num_args: u8) -> TokenStream {
+    let args: Vec<Ident> = (0..num_args)
         .into_iter()
-        .map(|n| &*format!("arg{}", n))
+        .map(|n| format_ident!("arg{}", n))
         .collect();
+    let context = if ctx { quote!(ctx,) } else { quote!() };
     quote! {
         |ctx, args| {
-            let mut args = args.clone();
-            #(let #args = args.next());*
+            let mut args = args.clone().iter();
+            // TODO: Better error msg
+            #(let #args = args.next().expect("Ran out of provided arguments").clone();)*
 
-            inner(ctx, #(#args.into_arg()),*);
+            Box::pin(async move {
+                inner(#context #(#args.as_arg()),*).await
+            })
         }
     }
 }

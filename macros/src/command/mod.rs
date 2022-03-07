@@ -14,9 +14,9 @@ pub struct CommandArgs {
     description: Option<String>,
 }
 
-fn extract_doc_comments(function: ItemFn) -> Option<String> {
+fn extract_doc_comments(function: &ItemFn) -> Option<String> {
     let mut doc_lines = String::new();
-    for attr in function.attrs {
+    for attr in &function.attrs {
         if attr.path == quote::format_ident!("doc").into() {
             if let Ok(meta) = attr.parse_meta() {
                 if let Meta::NameValue(nv) = meta {
@@ -41,30 +41,42 @@ fn extract_doc_comments(function: ItemFn) -> Option<String> {
 pub fn command(args: CommandArgs, function: ItemFn) -> Result<TokenStream, syn::Error> {
     let description = match args.description {
         Some(desc) => desc,
-        None => extract_doc_comments(function).ok_or(
-            syn::Error::new(function.sig.span(), "You must provide a slash command description in either doc comments of the function or as the `description` parameter to the macro.")
-        )?,
+        None => extract_doc_comments(&function).ok_or_else(|| syn::Error::new(function.sig.span(), "You must provide a slash command description in either doc comments of the function or as the `description` parameter to the macro."))?,
     };
 
     let name = args
         .name
         .unwrap_or_else(|| (&function.sig.ident).to_string());
-    let func_name = (&function.sig.ident).to_string();
+    let func_name = &function.sig.ident;
     let visibility = &function.vis;
+    if function.sig.asyncness.is_none() {
+        return Err(syn::Error::new(
+            function.sig.ident.span(),
+            "Command handler must be marked as async",
+        ));
+    }
 
     let mut inner_function = function.clone();
     inner_function.sig.ident = syn::parse_quote! { inner };
 
-    return Ok(quote! {
+    let parameters = params::get_args(&function)?;
+
+    let signature = parameters.as_signature();
+
+    let action =
+        actions::create_slash_command_action(parameters.context, parameters.args.len() as u8);
+
+    Ok(quote! {
         #visibility fn #func_name() -> ::ataraxy::Command {
             #inner_function
 
             ::ataraxy::Command {
-                name: #func_name,
-                description: #description,
-                action: #action,
+                name: #name.to_string(),
+                description: #description.to_string(),
+                arguments: #signature,
+                action: ::ataraxy::framework::command::CommandHandler(#action),
             }
         }
     }
-    .into());
+    .into())
 }

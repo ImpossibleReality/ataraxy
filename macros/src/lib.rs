@@ -14,6 +14,6 @@ pub fn command(args: TokenStream, function: TokenStream) -> TokenStream {
 
     match command::command(args, function) {
         Ok(x) => x,
-        Err(e) => e.write_errors().into(),
+        Err(e) => e.to_compile_error().into(),
     }
 }
