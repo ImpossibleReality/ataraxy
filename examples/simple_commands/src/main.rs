@@ -8,7 +8,10 @@ use std::env;
 /// Says "Hello world"
 #[command]
 async fn hello_world(ctx: Context, name: Option<String>) {
-    println!("Hello there, {}", name.unwrap_or("Joe".to_string()))
+    ctx.reply(format!(
+        "Hello there, {}",
+        name.unwrap_or("Joe".to_string())
+    ))
 }
 
 #[tokio::main]
@@ -20,7 +23,7 @@ async fn main() {
         .parse()
         .unwrap();
 
-    let framework = Framework::builder().add_command(hello_world);
+    let framework = Framework::new().command(hello_world);
 
     let mut client = Client::builder(token)
         .event_handler(framework)

@@ -1,5 +1,22 @@
+use ataraxy_macros::command_ide_arg_support;
 use serenity::builder::CreateApplicationCommandOption;
+use serenity::client::bridge::gateway::event::ShardStageUpdateEvent;
+use serenity::model::channel::{
+    Channel, ChannelCategory, GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance,
+};
+use serenity::model::event::{
+    ChannelPinsUpdateEvent, GuildMemberUpdateEvent, GuildMembersChunkEvent, InviteCreateEvent,
+    InviteDeleteEvent, MessageUpdateEvent, PresenceUpdateEvent, ResumedEvent, ThreadListSyncEvent,
+    ThreadMembersUpdateEvent, TypingStartEvent, VoiceServerUpdateEvent,
+};
+use serenity::model::gateway::Presence;
+use serenity::model::guild::{
+    Emoji, Guild, GuildUnavailable, Integration, Member, PartialGuild, Role, ThreadMember,
+};
+use serenity::model::id::{ApplicationId, ChannelId, EmojiId, IntegrationId, MessageId, RoleId};
 use serenity::model::interactions::application_command::ApplicationCommandType;
+use serenity::model::interactions::InteractionType;
+use serenity::model::prelude::{CurrentUser, User, Value, VoiceState};
 use serenity::{
     async_trait,
     model::{
@@ -15,6 +32,8 @@ use serenity::{
     },
     prelude::{Context as SerenityContext, *},
 };
+use std::any::Any;
+use std::collections::HashMap;
 
 pub mod command;
 mod context;
@@ -32,19 +51,21 @@ pub enum CommandMergeMethod {
 }
 
 pub struct Framework {
-    commands: Vec<Command>,
+    commands: HashMap<String, Command>,
     command_merging: CommandMergeMethod,
 }
 
 impl Framework {
-    pub fn builder() -> Self {
+    pub fn new() -> Self {
         Self {
-            commands: Vec::new(),
+            commands: HashMap::new(),
             command_merging: CommandMergeMethod::Set,
         }
     }
-
-    pub fn add_command(mut self, cmd: fn() -> Command) -> Self {
+    /// Adds a command to the framework
+    /// see [command!] for more details
+    #[command_ide_arg_support]
+    pub fn command<T: Any>(mut self, cmd: T) -> Self {
         self.commands.push(cmd());
         self
     }
@@ -63,10 +84,10 @@ impl EventHandler for Framework {
             CommandMergeMethod::Set => {
                 let guild_id = GuildId(782428786229903380);
 
-                let commands = guild_id
+                let _commands = guild_id
                     .set_application_commands(&ctx.http, |commands| {
                         let mut cmds = commands;
-                        for command in &self.commands {
+                        for (_, command) in &self.commands {
                             cmds = cmds.create_application_command(|cmd| {
                                 cmd.name(&command.name)
                                     .description(&command.description)
@@ -94,6 +115,23 @@ impl EventHandler for Framework {
                     })
                     .await;
             }
+        }
+    }
+
+    async fn interaction_create(&self, ctx: SerenityContext, interaction: Interaction) {
+        match interaction.kind() {
+            InteractionType::ApplicationCommand => {
+                let name = interaction.application_command().unwrap().data.name;
+                if let Some(command) = self.commands.get(&*name) {
+                    let context = Context::new(&ctx, &interaction);
+
+                    let args =
+
+                    command.action.0(context, args)
+                }
+                return;
+            }
+            _ => return,
         }
     }
 }

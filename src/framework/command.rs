@@ -1,4 +1,8 @@
-use serenity::model::interactions::application_command::ApplicationCommandOptionType as SerenityKind;
+use serenity::model::id::{ChannelId, RoleId, UserId};
+use serenity::model::interactions::application_command::{
+    ApplicationCommandInteractionDataOptionValue, ApplicationCommandOptionType as SerenityKind,
+};
+use serenity::model::{channel::Channel, guild::Role, user::User};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::pin::Pin;
@@ -8,6 +12,10 @@ pub enum CommandArgumentValueType {
     String,
     Integer,
     Number,
+    Channel,
+    User,
+    Role,
+    Boolean,
 }
 
 impl CommandArgumentValueType {
@@ -16,6 +24,10 @@ impl CommandArgumentValueType {
             CommandArgumentValueType::String => SerenityKind::String,
             CommandArgumentValueType::Integer => SerenityKind::Integer,
             CommandArgumentValueType::Number => SerenityKind::Number,
+            CommandArgumentValueType::Channel => SerenityKind::Channel,
+            CommandArgumentValueType::User => SerenityKind::User,
+            CommandArgumentValueType::Role => SerenityKind::Role,
+            CommandArgumentValueType::Boolean => SerenityKind::Boolean,
         }
     }
 }
@@ -23,8 +35,16 @@ impl CommandArgumentValueType {
 #[derive(Debug, Clone)]
 pub enum CommandArgumentValue {
     String(String),
-    Integer(i32),
+    Integer(i64),
     Number(f64),
+    Channel(ChannelId),
+    User(UserId),
+    Role(RoleId),
+    Boolean(boolId),
+}
+
+enum ArgumentError {
+    UnknownIncomingType,
 }
 
 impl CommandArgumentValue {
@@ -33,8 +53,27 @@ impl CommandArgumentValue {
             Self::String(_) => "String",
             Self::Integer(_) => "Integer",
             Self::Number(_) => "Float",
+            CommandArgumentValue::Channel(_) => "Channel",
+            CommandArgumentValue::User(_) => "User",
+            CommandArgumentValue::Role(_) => "Role",
+            CommandArgumentValue::Boolean(_) => "Boolean",
         }
         .to_string()
+    }
+
+    fn from_resolved(
+        resolved: ApplicationCommandInteractionDataOptionValue,
+    ) -> Result<Self, ArgumentError> {
+        Ok(match resolved {
+            ApplicationCommandInteractionDataOptionValue::String(s) => Self::String(s),
+            ApplicationCommandInteractionDataOptionValue::Integer(i) => Self::Integer(i),
+            ApplicationCommandInteractionDataOptionValue::Boolean(b) => Self::Boolean(b),
+            ApplicationCommandInteractionDataOptionValue::User(u, _) => Self::User(u.id),
+            ApplicationCommandInteractionDataOptionValue::Channel(c) => Self::Channel(c.id),
+            ApplicationCommandInteractionDataOptionValue::Role(r) => Self::Role(r.id),
+            ApplicationCommandInteractionDataOptionValue::Number(n) => Self::Number(n),
+            _ => return Err(ArgumentError::UnknownIncomingType),
+        })
     }
 }
 
