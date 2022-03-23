@@ -11,8 +11,7 @@ use std::env;
 #[command]
 async fn say_hello(
     ctx: Context,
-    #[option(channel_type = "voice", description = "Voice channel to say hello to")]
-    channel: Channel,
+    #[option(channel_type = "text", description = "Text channel to say hello to")] channel: Channel,
 ) {
     channel
         .id()
