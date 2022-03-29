@@ -1,4 +1,4 @@
-use crate::utils::Integer;
+use crate::numbers::Integer;
 use crate::Context;
 use async_trait::async_trait;
 use core::marker::Sized;
@@ -6,8 +6,9 @@ use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
-use serenity::futures::TryFutureExt;
+use serenity::builder::CreateApplicationCommandOption;
 use serenity::http::CacheHttp;
+use serenity::model::channel::ChannelType as SerenityChannelType;
 use serenity::model::channel::GuildChannel;
 use serenity::model::id::{ChannelId, RoleId, UserId};
 use serenity::model::interactions::application_command::{
@@ -17,9 +18,58 @@ use serenity::model::prelude::{Channel, User};
 
 #[derive(Debug, Copy, Clone)]
 pub enum ChannelType {
+    /// All voice channels (but not stage channels)
     Voice,
+    /// Only stage channels
+    Stage,
+    /// Any text channel, including news channels and normal text channels. No threads.
     Text,
-    Both,
+    /// Only news channels
+    News,
+    /// Private threads in news channels
+    NewsThreads,
+    /// Any public threads
+    Thread,
+    /// Any channel category
+    Category,
+    /// Private channels (ie DMs)
+    Private,
+    /// Any type of channel
+    All,
+}
+
+pub fn as_channel_types(channel_types: Vec<ChannelType>) -> Vec<SerenityChannelType> {
+    let mut channels = Vec::new();
+
+    for c in channel_types {
+        match c {
+            ChannelType::Voice => channels.extend_from_slice(&[SerenityChannelType::Voice]),
+            ChannelType::Text => channels.extend_from_slice(&[SerenityChannelType::Text]),
+            ChannelType::Stage => channels.extend_from_slice(&[SerenityChannelType::Stage]),
+            ChannelType::News => channels.extend_from_slice(&[SerenityChannelType::News]),
+            ChannelType::NewsThreads => {
+                channels.extend_from_slice(&[SerenityChannelType::PrivateThread])
+            }
+            ChannelType::Thread => channels.extend_from_slice(&[SerenityChannelType::PublicThread]),
+            ChannelType::Category => channels.extend_from_slice(&[SerenityChannelType::Category]),
+            ChannelType::Private => channels.extend_from_slice(&[SerenityChannelType::Private]),
+            ChannelType::All => channels.extend_from_slice(&[
+                SerenityChannelType::Text,
+                SerenityChannelType::Voice,
+                SerenityChannelType::Category,
+                SerenityChannelType::Stage,
+                SerenityChannelType::Private,
+                SerenityChannelType::PrivateThread,
+                SerenityChannelType::News,
+                SerenityChannelType::NewsThread,
+                SerenityChannelType::PublicThread,
+                SerenityChannelType::Private,
+            ]),
+        }
+    }
+    channels.sort();
+    channels.dedup();
+    channels
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +78,7 @@ pub struct CommandArgumentOptions {
     pub max: Option<f64>,
     pub min_len: Option<u64>,
     pub max_len: Option<u64>,
-    pub channel_type: Option<ChannelType>,
+    pub channel_type: Option<Vec<ChannelType>>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +87,71 @@ pub struct CommandArgumentSignature {
     pub description: String,
     pub argument: CommandArgumentType,
     pub options: CommandArgumentOptions,
+}
+
+impl CommandArgumentSignature {
+    pub fn as_serenity_option(&self) -> CreateApplicationCommandOption {
+        match self.argument.value_type {
+            CommandArgumentValueType::String => CreateApplicationCommandOption::default()
+                .name(&self.name)
+                .description(&self.description)
+                .kind(self.argument.value_type.as_serenity_kind())
+                .required(!self.argument.optional)
+                .clone(),
+            CommandArgumentValueType::Integer(min, max) => {
+                let mut o = CreateApplicationCommandOption::default();
+                o.name(&self.name)
+                    .description(&self.description)
+                    .kind(self.argument.value_type.as_serenity_kind())
+                    .required(!self.argument.optional);
+                o.min_number_value(self.options.min.unwrap_or(min));
+                o.max_number_value(self.options.max.unwrap_or(max));
+
+                o.clone()
+            }
+            CommandArgumentValueType::Number(min, max) => {
+                let mut o = CreateApplicationCommandOption::default();
+                o.name(&self.name)
+                    .description(&self.description)
+                    .kind(self.argument.value_type.as_serenity_kind())
+                    .required(!self.argument.optional);
+                o.min_number_value(self.options.min.unwrap_or(min));
+                o.max_number_value(self.options.max.unwrap_or(max));
+
+                o.clone()
+            }
+            CommandArgumentValueType::Channel => CreateApplicationCommandOption::default()
+                .name(&self.name)
+                .description(&self.description)
+                .kind(self.argument.value_type.as_serenity_kind())
+                .required(!self.argument.optional)
+                .channel_types(&*as_channel_types(
+                    self.options
+                        .channel_type
+                        .clone()
+                        .unwrap_or(Vec::from([ChannelType::All])),
+                ))
+                .clone(),
+            CommandArgumentValueType::User => CreateApplicationCommandOption::default()
+                .name(&self.name)
+                .description(&self.description)
+                .kind(self.argument.value_type.as_serenity_kind())
+                .required(!self.argument.optional)
+                .clone(),
+            CommandArgumentValueType::Role => CreateApplicationCommandOption::default()
+                .name(&self.name)
+                .description(&self.description)
+                .kind(self.argument.value_type.as_serenity_kind())
+                .required(!self.argument.optional)
+                .clone(),
+            CommandArgumentValueType::Boolean => CreateApplicationCommandOption::default()
+                .name(&self.name)
+                .description(&self.description)
+                .kind(self.argument.value_type.as_serenity_kind())
+                .required(!self.argument.optional)
+                .clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -73,22 +188,10 @@ impl ArgumentList {
 }
 
 #[derive(Debug, Clone)]
-pub struct IntegerOptions {
-    max: i64,
-    min: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct NumberOptions {
-    max: f64,
-    min: f64,
-}
-
-#[derive(Debug, Clone)]
 pub enum CommandArgumentValueType {
     String,
-    Integer(IntegerOptions),
-    Number(NumberOptions),
+    Integer(f64, f64),
+    Number(f64, f64),
     Channel,
     User,
     Role,
@@ -99,8 +202,8 @@ impl CommandArgumentValueType {
     pub fn as_serenity_kind(&self) -> SerenityKind {
         match self {
             CommandArgumentValueType::String => SerenityKind::String,
-            CommandArgumentValueType::Integer(_) => SerenityKind::Integer,
-            CommandArgumentValueType::Number(_) => SerenityKind::Number,
+            CommandArgumentValueType::Integer(_, _) => SerenityKind::Integer,
+            CommandArgumentValueType::Number(_, _) => SerenityKind::Number,
             CommandArgumentValueType::Channel => SerenityKind::Channel,
             CommandArgumentValueType::User => SerenityKind::User,
             CommandArgumentValueType::Role => SerenityKind::Role,
@@ -265,7 +368,7 @@ impl AsCommandArgumentValue for String {
     }
 
     async fn from_returned_argument(
-        ctx: &Context,
+        _ctx: &Context,
         arg: Option<CommandArgumentValue>,
     ) -> Result<Self, ArgumentError> {
         if let Some(arg) = arg {
@@ -286,14 +389,11 @@ impl AsCommandArgumentValue for String {
 #[async_trait]
 impl<T: Integer> AsCommandArgumentValue for T {
     fn value_type() -> CommandArgumentValueType {
-        CommandArgumentValueType::Integer(IntegerOptions {
-            max: T::MAX as i64,
-            min: T::MIN as i64,
-        })
+        CommandArgumentValueType::Integer(T::MIN as f64, T::MAX as f64)
     }
 
     async fn from_returned_argument(
-        ctx: &Context,
+        _ctx: &Context,
         arg: Option<CommandArgumentValue>,
     ) -> Result<Self, ArgumentError> {
         if let Some(arg) = arg {
@@ -318,7 +418,7 @@ impl AsCommandArgumentValue for bool {
     }
 
     async fn from_returned_argument(
-        ctx: &Context,
+        _ctx: &Context,
         arg: Option<CommandArgumentValue>,
     ) -> Result<Self, ArgumentError>
     where
@@ -346,7 +446,7 @@ impl AsCommandArgumentValue for UserId {
     }
 
     async fn from_returned_argument(
-        ctx: &Context,
+        _ctx: &Context,
         arg: Option<CommandArgumentValue>,
     ) -> Result<Self, ArgumentError>
     where
@@ -382,7 +482,7 @@ impl AsCommandArgumentValue for User {
     {
         if let Some(arg) = arg {
             if let CommandArgumentValue::User(arg) = arg {
-                return arg.to_user(&ctx.http()).await.map_err(|e| {
+                return arg.to_user(&ctx.http()).await.map_err(|_e| {
                     ArgumentPreprocessingError("Error fetching cached user".to_string())
                 });
             }
@@ -404,7 +504,7 @@ impl AsCommandArgumentValue for ChannelId {
     }
 
     async fn from_returned_argument(
-        ctx: &Context,
+        _ctx: &Context,
         arg: Option<CommandArgumentValue>,
     ) -> Result<Self, ArgumentError>
     where
@@ -440,7 +540,7 @@ impl AsCommandArgumentValue for Channel {
     {
         if let Some(arg) = arg {
             if let CommandArgumentValue::Channel(arg) = arg {
-                return arg.to_channel(&ctx.http()).await.map_err(|e| {
+                return arg.to_channel(&ctx.http()).await.map_err(|_e| {
                     ArgumentPreprocessingError("Error fetching cached user".to_string())
                 });
             }
@@ -473,7 +573,7 @@ impl AsCommandArgumentValue for GuildChannel {
                 return arg
                     .to_channel(&ctx.http())
                     .await
-                    .map_err(|e| {
+                    .map_err(|_e| {
                         ArgumentPreprocessingError("Error fetching cached channel".to_string())
                     })
                     .and_then(|c| match c {

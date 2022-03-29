@@ -11,6 +11,7 @@ unsafe-any = "0.4.2"
 ataraxy-macros = { path = "./macros" }
 num-traits = "0.2"
 async-trait = "0.1"
+az = "1.2"
 
 [workspace]
 members = ["macros"]

@@ -1,5 +1,5 @@
 use crate::utils::MacroError::*;
-use crate::utils::{quote_option, MacroError};
+use crate::utils::{quote_option, quote_vec, MacroError, Multiple};
 use darling::FromMeta;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
@@ -10,9 +10,24 @@ use syn::{FnArg, ItemFn, Meta, Pat, Type};
 
 #[derive(Debug, Clone, darling::FromMeta)]
 enum ChannelType {
-    Text,
+    /// All voice channels (but not stage channels)
     Voice,
-    Both,
+    /// Only stage channels
+    Stage,
+    /// Any text channel, including news channels and normal text channels. No threads.
+    Text,
+    /// Only news channels
+    News,
+    /// Private threads in news channels
+    NewsThreads,
+    /// Any public threads
+    Thread,
+    /// Any channel category
+    Category,
+    /// Private channels (ie DMs)
+    Private,
+    /// Any type of channel
+    All,
 }
 
 #[derive(Default, Debug, darling::FromMeta)]
@@ -22,7 +37,7 @@ pub struct CommandArgOptions {
     max: Option<f64>,
     min_len: Option<u64>,
     max_len: Option<u64>,
-    channel_type: Option<ChannelType>,
+    channel_type: Option<Multiple<ChannelType>>,
     name: Option<String>,
     description: Option<String>,
 }
@@ -154,18 +169,36 @@ impl CommandArg {
         let max = quote_option(&self.options.max);
         let min_len = quote_option(&self.options.min_len);
         let max_len = quote_option(&self.options.max_len);
-        let channel_type = quote_option(&self.options.channel_type.clone().and_then(|c| {
-            Some(match c {
+        let channel_type = quote_option(&self.options.channel_type.clone().and_then(|cs| {
+            Some(quote_vec(&cs.0.iter().map(|c| match c {
                 ChannelType::Text => {
                     quote! { ::ataraxy::framework::command::argument::ChannelType::Text }
                 }
                 ChannelType::Voice => {
                     quote! { ::ataraxy::framework::command::argument::ChannelType::Voice }
                 }
-                ChannelType::Both => {
-                    quote! { ::ataraxy::framework::command::argument::ChannelType::Both }
+                ChannelType::All => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::All }
                 }
-            })
+                ChannelType::Category => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::Category }
+                }
+                ChannelType::News => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::News }
+                }
+                ChannelType::NewsThreads => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::NewsThreads }
+                }
+                ChannelType::Private => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::Private }
+                }
+                ChannelType::Stage => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::Stage }
+                }
+                ChannelType::Thread => {
+                    quote! { ::ataraxy::framework::command::argument::ChannelType::Thread }
+                }
+            }).collect::<Vec<TokenStream>>()))
         }));
         quote! {
             ::ataraxy::framework::command::argument::CommandArgumentOptions {

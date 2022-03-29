@@ -1,10 +1,8 @@
-use crate::Command;
 use serenity::http::{CacheHttp, Http};
 use serenity::model::interactions::application_command::ApplicationCommandInteraction;
 use serenity::model::interactions::InteractionResponseType;
 use serenity::model::prelude::InteractionApplicationCommandCallbackDataFlags;
 use serenity::prelude::Context as SerenityContext;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Context {
@@ -39,7 +37,8 @@ impl Context {
                 res.kind(InteractionResponseType::ChannelMessageWithSource)
                     .interaction_response_data(|data| data.content(msg.into()))
             })
-            .await;
+            .await
+            .ok();
     }
 
     pub async fn reply_ephemeral<S: Into<String>>(&self, msg: S) {
@@ -55,6 +54,7 @@ impl Context {
                             .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
                     })
             })
-            .await;
+            .await
+            .ok();
     }
 }
