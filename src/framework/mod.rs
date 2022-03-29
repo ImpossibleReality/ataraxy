@@ -1,38 +1,17 @@
 use ataraxy_macros::command_ide_arg_support;
 use serenity::builder::CreateApplicationCommandOption;
-use serenity::client::bridge::gateway::event::ShardStageUpdateEvent;
-use serenity::model::channel::{
-    Channel, ChannelCategory, GuildChannel, Message, PartialGuildChannel, Reaction, StageInstance,
-};
-use serenity::model::event::{
-    ChannelPinsUpdateEvent, GuildMemberUpdateEvent, GuildMembersChunkEvent, InviteCreateEvent,
-    InviteDeleteEvent, MessageUpdateEvent, PresenceUpdateEvent, ResumedEvent, ThreadListSyncEvent,
-    ThreadMembersUpdateEvent, TypingStartEvent, VoiceServerUpdateEvent,
-};
-use serenity::model::gateway::Presence;
-use serenity::model::guild::{
-    Emoji, Guild, GuildUnavailable, Integration, Member, PartialGuild, Role, ThreadMember,
-};
-use serenity::model::id::{ApplicationId, ChannelId, EmojiId, IntegrationId, MessageId, RoleId};
+use std::any::Any;
+
 use serenity::model::interactions::application_command::ApplicationCommandType;
 use serenity::model::interactions::InteractionType;
-use serenity::model::prelude::{CurrentUser, User, VoiceState};
+
 use serenity::{
     async_trait,
-    model::{
-        gateway::Ready,
-        id::GuildId,
-        interactions::{
-            application_command::{
-                ApplicationCommand, ApplicationCommandInteractionDataOptionValue,
-                ApplicationCommandOptionType,
-            },
-            Interaction, InteractionResponseType,
-        },
-    },
+    model::{gateway::Ready, id::GuildId, interactions::Interaction},
     prelude::{Context as SerenityContext, *},
 };
-use std::any::Any;
+
+use serenity::model::prelude::application_command::ApplicationCommandOptionType;
 use std::collections::HashMap;
 
 pub mod command;
@@ -52,8 +31,30 @@ pub enum CommandMergeMethod {
 }
 
 pub struct Framework {
-    commands: HashMap<String, Command>,
+    commands: HashMap<String, ValidCommand>,
     command_merging: CommandMergeMethod,
+}
+
+pub trait IntoValidCommand {
+    fn into_command(self) -> ValidCommand;
+}
+
+impl IntoValidCommand for Command {
+    fn into_command(self) -> ValidCommand {
+        ValidCommand::Command(self)
+    }
+}
+
+impl IntoValidCommand for SubCommands {
+    fn into_command(self) -> ValidCommand {
+        ValidCommand::SubCommands(self)
+    }
+}
+
+impl<T: Fn() -> C, C: IntoValidCommand> IntoValidCommand for T {
+    fn into_command(self) -> ValidCommand {
+        self().into_command()
+    }
 }
 
 impl Framework {
@@ -65,15 +66,104 @@ impl Framework {
     }
     /// Adds a command to the framework
     /// see [command!] for more details
+    // Macro is for IDE support, since CLion freaks out without it
+    // What is weird is that SubCommand::command() doesn't freak aut about
+    // the function signature change for some reason ¯\_(ツ)_/¯
     #[command_ide_arg_support]
     pub fn command<T: Any>(mut self, cmd: T) -> Self {
-        self.commands.insert(cmd().name, cmd());
+        let command = cmd.into_command();
+        self.commands.insert(command.name().clone(), command);
         self
     }
 
     pub fn set_merge_method(mut self, method: CommandMergeMethod) -> Self {
         self.command_merging = method;
         self
+    }
+}
+
+/// Represents a list of subcommands as a command
+pub struct SubCommands {
+    pub name: String,
+    pub description: String,
+    pub subcommands: HashMap<String, SubCommand>,
+}
+
+impl SubCommands {
+    /// Create a new command with no subcommands
+    pub fn new<S: Into<String>>(name: S, description: S) -> Self {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            subcommands: HashMap::new(),
+        }
+    }
+
+    /// Add a subcommand to the command
+    pub fn command(mut self, cmd: fn() -> Command) -> Self {
+        let cmd = cmd();
+        self.subcommands
+            .insert(cmd.name.clone(), SubCommand::SubCommand(cmd));
+        self
+    }
+
+    /// Add a command group to the command
+    pub fn group(mut self, group: CommandGroup) -> Self {
+        self.subcommands
+            .insert(group.name.clone(), SubCommand::SubCommandGroup(group));
+        self
+    }
+}
+
+pub struct CommandGroup {
+    pub name: String,
+    pub description: String,
+    pub subcommands: HashMap<String, Command>,
+}
+impl CommandGroup {
+    /// Create a new command group
+    pub fn new<T: IntoIterator, S: Into<String>>(name: S, description: S, commands: T) -> Self
+    where
+        T::Item: Fn() -> Command,
+    {
+        Self {
+            name: name.into(),
+            description: description.into(),
+            subcommands: commands
+                .into_iter()
+                .map(|c| {
+                    let cmd = c();
+                    (cmd.name.clone(), cmd)
+                })
+                .collect(),
+        }
+    }
+}
+
+pub enum SubCommand {
+    SubCommand(Command),
+    SubCommandGroup(CommandGroup),
+}
+
+/// Represents any kind of valid command (either simple command of command with subcommands)
+pub enum ValidCommand {
+    Command(Command),
+    SubCommands(SubCommands),
+}
+
+impl ValidCommand {
+    pub fn name(&self) -> &String {
+        match self {
+            ValidCommand::Command(cmd) => &cmd.name,
+            ValidCommand::SubCommands(subcmds) => &subcmds.name,
+        }
+    }
+
+    pub fn description(&self) -> &String {
+        match self {
+            ValidCommand::Command(cmd) => &cmd.description,
+            ValidCommand::SubCommands(subcmds) => &subcmds.description,
+        }
     }
 }
 
@@ -89,32 +179,68 @@ impl EventHandler for Framework {
                     .set_application_commands(&ctx.http, |commands| {
                         let mut cmds = commands;
                         for (_, command) in &self.commands {
-                            cmds = cmds.create_application_command(|cmd| {
-                                cmd.name(&command.name)
-                                    .description(&command.description)
-                                    .kind(ApplicationCommandType::ChatInput)
-                                    .set_options(
-                                        command
-                                            .arguments
-                                            .arguments
-                                            .iter()
-                                            .map(|opt| {
-                                                CreateApplicationCommandOption::default()
-                                                    .name(&opt.name)
-                                                    .description(&opt.description)
-                                                    .required(!opt.argument.optional)
-                                                    .kind(
-                                                        opt.argument.value_type.as_serenity_kind(),
-                                                    )
-                                                    .clone()
-                                            })
-                                            .collect(),
-                                    )
-                            })
+                            match command {
+                                ValidCommand::Command(command) => {
+                                    cmds.create_application_command(|cmd| {
+                                        cmd.name(&command.name)
+                                            .description(&command.description)
+                                            .kind(ApplicationCommandType::ChatInput)
+                                            .set_options(
+                                                command
+                                                    .arguments
+                                                    .arguments
+                                                    .iter()
+                                                    .map(|opt| opt.as_serenity_option())
+                                                    .collect(),
+                                            )
+                                    });
+                                }
+                                ValidCommand::SubCommands(subcommands) => {
+                                    cmds.create_application_command(|cmd| {
+                                        cmd.name(&subcommands.name)
+                                            .description(&subcommands.description)
+                                            .kind(ApplicationCommandType::ChatInput)
+                                            .set_options(subcommands.subcommands.values().map(|subcommand| {
+                                                match subcommand {
+                                                    SubCommand::SubCommand(subcmd) => {
+                                                        let mut c = CreateApplicationCommandOption::default();
+                                                        c
+                                                            .kind(ApplicationCommandOptionType::SubCommand)
+                                                            .name(&subcmd.name)
+                                                            .description(&subcmd.description);
+                                                        for arg in &subcmd.arguments.arguments {
+                                                            c.add_sub_option(arg.as_serenity_option());
+                                                        }
+                                                        c
+                                                    }
+                                                    SubCommand::SubCommandGroup(subcmdgroup) => {
+                                                        let mut c = CreateApplicationCommandOption::default()
+                                                            .kind(ApplicationCommandOptionType::SubCommandGroup)
+                                                            .name(&subcmdgroup.name)
+                                                            .description(&subcmdgroup.description)
+                                                            .clone();
+                                                        for subcmd in subcmdgroup.subcommands.values() {
+                                                            c.create_sub_option(|c| {
+                                                                c.kind(ApplicationCommandOptionType::SubCommand)
+                                                                    .name(&subcmd.name)
+                                                                    .description(&subcmd.description);
+                                                                for arg in &subcmd.arguments.arguments {
+                                                                    c.add_sub_option(arg.as_serenity_option());
+                                                                }
+                                                                c
+                                                            });
+                                                        }
+                                                        c
+                                                    }
+                                                }.clone()
+                                            }).collect())
+                                    });
+                                }
+                            }
                         }
                         cmds
                     })
-                    .await;
+                    .await.unwrap();
             }
         }
     }
@@ -125,30 +251,117 @@ impl EventHandler for Framework {
                 let interaction_command = interaction.application_command().unwrap();
                 let name = &interaction_command.data.name;
                 if let Some(command) = self.commands.get(&*name) {
-                    let context = Context::new(&ctx, &interaction_command);
+                    match command {
+                        ValidCommand::Command(command) => {
+                            let context = Context::new(&ctx, &interaction_command);
 
-                    let options = interaction_command.data.options;
+                            let options = interaction_command.data.options;
 
-                    let args: Result<Vec<CommandArgument>, _> = options
-                        .iter()
-                        .map(|opt| {
-                            let value = match &opt.resolved {
-                                Some(arg) => match CommandArgumentValue::from_resolved(arg) {
-                                    Ok(v) => Some(v),
-                                    Err(e) => return Err(e),
-                                },
-                                None => None,
-                            };
-                            Ok(CommandArgument {
-                                name: opt.name.clone(),
-                                value,
-                            })
-                        })
-                        .collect();
-                    if let Err(_) = args {
-                        return;
+                            let args: Result<Vec<CommandArgument>, _> = options
+                                .iter()
+                                .map(|opt| {
+                                    let value = match &opt.resolved {
+                                        Some(arg) => match CommandArgumentValue::from_resolved(arg)
+                                        {
+                                            Ok(v) => Some(v),
+                                            Err(e) => return Err(e),
+                                        },
+                                        None => None,
+                                    };
+                                    Ok(CommandArgument {
+                                        name: opt.name.clone(),
+                                        value,
+                                    })
+                                })
+                                .collect();
+                            if let Err(_) = args {
+                                return;
+                            }
+                            command.action.0(context, &ArgumentList::new(args.unwrap())).await;
+                        }
+                        ValidCommand::SubCommands(subcmds) => {
+                            let options = &interaction_command.data.options;
+                            if let Some(sub_cmd_opt) = options.get(0) {
+                                if let Some(called_sub_cmd) =
+                                    subcmds.subcommands.get(&*sub_cmd_opt.name)
+                                {
+                                    match called_sub_cmd {
+                                        SubCommand::SubCommand(subcmd) => {
+                                            let context = Context::new(&ctx, &interaction_command);
+                                            let new_options = sub_cmd_opt.options.clone();
+
+                                            let args: Result<Vec<CommandArgument>, _> = new_options
+                                                .iter()
+                                                .map(|opt| {
+                                                    let value = match &opt.resolved {
+                                                        Some(arg) => match CommandArgumentValue::from_resolved(arg)
+                                                        {
+                                                            Ok(v) => Some(v),
+                                                            Err(e) => return Err(e),
+                                                        },
+                                                        None => None,
+                                                    };
+                                                    Ok(CommandArgument {
+                                                        name: opt.name.clone(),
+                                                        value,
+                                                    })
+                                                })
+                                                .collect();
+
+                                            if let Err(_) = args {
+                                                return;
+                                            }
+
+                                            subcmd.action.0(
+                                                context,
+                                                &ArgumentList::new(args.unwrap()),
+                                            )
+                                            .await;
+                                        }
+                                        SubCommand::SubCommandGroup(subcmdgroup) => {
+                                            if let Some(sub_cmd_opt) = sub_cmd_opt.options.get(0) {
+                                                if let Some(subcmd) =
+                                                    subcmdgroup.subcommands.get(&*sub_cmd_opt.name)
+                                                {
+                                                    let context =
+                                                        Context::new(&ctx, &interaction_command);
+                                                    let new_options = sub_cmd_opt.options.clone();
+
+                                                    let args: Result<Vec<CommandArgument>, _> = new_options
+                                                        .iter()
+                                                        .map(|opt| {
+                                                            let value = match &opt.resolved {
+                                                                Some(arg) => match CommandArgumentValue::from_resolved(arg)
+                                                                {
+                                                                    Ok(v) => Some(v),
+                                                                    Err(e) => return Err(e),
+                                                                },
+                                                                None => None,
+                                                            };
+                                                            Ok(CommandArgument {
+                                                                name: opt.name.clone(),
+                                                                value,
+                                                            })
+                                                        })
+                                                        .collect();
+
+                                                    if let Err(_) = args {
+                                                        return;
+                                                    }
+
+                                                    subcmd.action.0(
+                                                        context,
+                                                        &ArgumentList::new(args.unwrap()),
+                                                    )
+                                                    .await;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    command.action.0(context, &ArgumentList::new(args.unwrap())).await;
                 }
                 return;
             }

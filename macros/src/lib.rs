@@ -11,19 +11,23 @@ mod utils;
 /// produces functions which can be passed to [`Framework::command`](ataraxy::Framework::command)
 /// # Examples
 /// ```rust, no_run
-/// # extern crate ataraxy;
-/// # use ataraxy::{ Framework, Context, command };
-///
-/// // Command Description
+/// /// This Doc comment will be the command description
 /// #[command]
-/// async fn greet(ctx: Context, name: Option<String>) {
-///     ctx.reply(msg!("Hello, {}", name.unwrap_or("Joe".to_string())))
+/// async fn say_hello(
+///     ctx: Context,
+///     #[option(
+///         channel_type = "text",
+///         name = "Channel"
+///         description = "Text channel to say hello to"
+///     )]
+///     channel: Channel,
+/// ) {
+///     channel
+///         .id()
+///         .send_message(&ctx.http(), |m| m.content("Hello, world!"))
+///         .await;
+///     ctx.reply_ephemeral("Sent message").await;
 /// }
-/// // ... snip ...
-/// # fn main() {
-/// let framework = Framework::new()
-///                     .command(greet);
-/// # }
 /// ```
 #[proc_macro_attribute]
 pub fn command(args: TokenStream, function: TokenStream) -> TokenStream {
@@ -50,8 +54,8 @@ pub fn command(args: TokenStream, function: TokenStream) -> TokenStream {
 pub fn command_ide_arg_support(_args: TokenStream, function: TokenStream) -> TokenStream {
     let mut fun = syn::parse_macro_input!(function as syn::ImplItem);
     if let syn::ImplItem::Method(mut function) = fun {
-        function.sig.inputs = parse_quote! { mut self, cmd: fn() -> Command };
-        function.sig.generics = syn::Generics::default();
+        function.sig.inputs = parse_quote! { mut self, cmd: T };
+        function.sig.generics = parse_quote! { <T: IntoValidCommand> };
         return function.into_token_stream().into();
     } else {
         return syn::Error::new(fun.span(), "Cannot wrap this :(")
