@@ -1,6 +1,6 @@
-use proc_macro2::Ident;
+
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{quote};
 
 pub fn create_slash_command_action(ctx: bool, num_args: u8) -> TokenStream {
     let args: Vec<TokenStream> = (0..num_args)

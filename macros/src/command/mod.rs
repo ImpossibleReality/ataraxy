@@ -7,7 +7,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
 use syn::Lit::Str;
-use syn::{Attribute, FnArg, ItemFn, Meta};
+use syn::{FnArg, ItemFn, Meta};
 
 #[derive(Default, Debug, darling::FromMeta)]
 #[darling(default)]
@@ -20,15 +20,13 @@ fn extract_doc_comments(function: &ItemFn) -> Option<String> {
     let mut doc_lines = String::new();
     for attr in &function.attrs {
         if attr.path == quote::format_ident!("doc").into() {
-            if let Ok(meta) = attr.parse_meta() {
-                if let Meta::NameValue(nv) = meta {
-                    if let Str(literal) = nv.lit {
-                        let literal = literal.value();
-                        let literal = literal.strip_prefix(' ').unwrap_or(&literal);
+            if let Ok(Meta::NameValue(nv)) = attr.parse_meta() {
+                if let Str(literal) = nv.lit {
+                    let literal = literal.value();
+                    let literal = literal.strip_prefix(' ').unwrap_or(&literal);
 
-                        doc_lines += literal;
-                        doc_lines += "\n";
-                    }
+                    doc_lines += literal;
+                    doc_lines += "\n";
                 }
             }
         }

@@ -1,9 +1,8 @@
 use crate::utils::MacroError::*;
 use crate::utils::{quote_option, quote_vec, MacroError, Multiple};
-use darling::FromMeta;
+
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn;
 use syn::spanned::Spanned;
 use syn::FnArg::Typed;
 use syn::{FnArg, ItemFn, Meta, Pat, Type};
@@ -113,7 +112,7 @@ pub fn get_args(func: &ItemFn) -> Result<CommandParameters, MacroError> {
                         .flatten()
                         .collect::<Vec<_>>(),
                 )
-                .map_err(|e| DarlingError(e))?;
+                .map_err(DarlingError)?;
 
                 if let Pat::Ident(id) = &*t.pat {
                     args.push(CommandArg {
@@ -136,7 +135,7 @@ impl CommandParameters {
         let args: Vec<TokenStream> = self
             .args
             .iter()
-            .map(|arg| arg.clone().as_signature())
+            .map(|arg| arg.as_signature())
             .collect();
 
         quote! {
@@ -169,8 +168,8 @@ impl CommandArg {
         let max = quote_option(&self.options.max);
         let min_len = quote_option(&self.options.min_len);
         let max_len = quote_option(&self.options.max_len);
-        let channel_type = quote_option(&self.options.channel_type.clone().and_then(|cs| {
-            Some(quote_vec(&cs.0.iter().map(|c| match c {
+        let channel_type = quote_option(&self.options.channel_type.clone().map(|cs| {
+            quote_vec(&cs.0.iter().map(|c| match c {
                 ChannelType::Text => {
                     quote! { ::ataraxy::framework::command::argument::ChannelType::Text }
                 }
@@ -198,7 +197,7 @@ impl CommandArg {
                 ChannelType::Thread => {
                     quote! { ::ataraxy::framework::command::argument::ChannelType::Thread }
                 }
-            }).collect::<Vec<TokenStream>>()))
+            }).collect::<Vec<TokenStream>>())
         }));
         quote! {
             ::ataraxy::framework::command::argument::CommandArgumentOptions {

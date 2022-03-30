@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{Lit, Meta, NestedMeta};
+use syn::Lit;
 
 /// Struct to parse a list of values from an attribute in darling: `#[multiple("item1", "item2")]`
 #[derive(Debug, Clone, Default)]
@@ -20,7 +20,7 @@ impl<T: darling::FromMeta> darling::FromMeta for Multiple<T> {
 }
 
 /// Quotes an Option<T>
-pub fn quote_vec<T: ToTokens>(opt: &Vec<T>) -> TokenStream {
+pub fn quote_vec<T: ToTokens>(opt: &[T]) -> TokenStream {
     quote! {
         vec! [#(#opt),*]
     }

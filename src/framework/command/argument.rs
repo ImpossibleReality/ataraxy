@@ -7,7 +7,6 @@ use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
 use serenity::builder::CreateApplicationCommandOption;
-use serenity::http::CacheHttp;
 use serenity::model::channel::ChannelType as SerenityChannelType;
 use serenity::model::channel::GuildChannel;
 use serenity::model::id::{ChannelId, RoleId, UserId};
@@ -15,6 +14,7 @@ use serenity::model::interactions::application_command::{
     ApplicationCommandInteractionDataOptionValue, ApplicationCommandOptionType as SerenityKind,
 };
 use serenity::model::prelude::{Channel, User};
+use std::fmt::Display;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ChannelType {
@@ -129,7 +129,7 @@ impl CommandArgumentSignature {
                     self.options
                         .channel_type
                         .clone()
-                        .unwrap_or(Vec::from([ChannelType::All])),
+                        .unwrap_or_else(|| Vec::from([ChannelType::All])),
                 ))
                 .clone(),
             CommandArgumentValueType::User => CreateApplicationCommandOption::default()
@@ -240,19 +240,6 @@ pub enum ArgumentError {
 use ArgumentError::*;
 
 impl CommandArgumentValue {
-    pub fn to_string(self) -> String {
-        match self {
-            Self::String(_) => "String",
-            Self::Integer(_) => "Integer",
-            Self::Number(_) => "Float",
-            CommandArgumentValue::Channel(_) => "Channel",
-            CommandArgumentValue::User(_) => "User",
-            CommandArgumentValue::Role(_) => "Role",
-            CommandArgumentValue::Boolean(_) => "Boolean",
-        }
-        .to_string()
-    }
-
     pub fn from_resolved(
         resolved: &ApplicationCommandInteractionDataOptionValue,
     ) -> Result<Self, ArgumentError> {
@@ -266,6 +253,24 @@ impl CommandArgumentValue {
             ApplicationCommandInteractionDataOptionValue::Number(n) => Self::Number(*n),
             _ => return Err(ArgumentError::UnknownIncomingType),
         })
+    }
+}
+
+impl Display for CommandArgumentValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::String(_) => "String",
+                Self::Integer(_) => "Integer",
+                Self::Number(_) => "Float",
+                CommandArgumentValue::Channel(_) => "Channel",
+                CommandArgumentValue::User(_) => "User",
+                CommandArgumentValue::Role(_) => "Role",
+                CommandArgumentValue::Boolean(_) => "Boolean",
+            }
+        )
     }
 }
 
@@ -373,11 +378,11 @@ impl AsCommandArgumentValue for String {
     ) -> Result<Self, ArgumentError> {
         if let Some(arg) = arg {
             if let CommandArgumentValue::String(arg) = arg {
-                return Ok(arg.to_string());
+                return Ok(arg);
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected string, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -402,7 +407,7 @@ impl<T: Integer> AsCommandArgumentValue for T {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected integer, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -430,7 +435,7 @@ impl AsCommandArgumentValue for bool {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected boolean, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -458,7 +463,7 @@ impl AsCommandArgumentValue for UserId {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected user, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -488,7 +493,7 @@ impl AsCommandArgumentValue for User {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected user, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -516,7 +521,7 @@ impl AsCommandArgumentValue for ChannelId {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected channel, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -546,7 +551,7 @@ impl AsCommandArgumentValue for Channel {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected channel, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(
@@ -591,7 +596,7 @@ impl AsCommandArgumentValue for GuildChannel {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected channel, found: {}",
-                arg.to_string()
+                arg
             )));
         }
         Err(IncomingArgumentNotProvided(

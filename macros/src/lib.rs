@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::parse_quote;
 use syn::spanned::Spanned;
 use utils::MacroError;
@@ -52,14 +52,14 @@ pub fn command(args: TokenStream, function: TokenStream) -> TokenStream {
 /// function signatures (looking at you clion)
 #[proc_macro_attribute]
 pub fn command_ide_arg_support(_args: TokenStream, function: TokenStream) -> TokenStream {
-    let mut fun = syn::parse_macro_input!(function as syn::ImplItem);
+    let fun = syn::parse_macro_input!(function as syn::ImplItem);
     if let syn::ImplItem::Method(mut function) = fun {
         function.sig.inputs = parse_quote! { mut self, cmd: T };
         function.sig.generics = parse_quote! { <T: IntoValidCommand> };
-        return function.into_token_stream().into();
+        function.into_token_stream().into()
     } else {
-        return syn::Error::new(fun.span(), "Cannot wrap this :(")
+        syn::Error::new(fun.span(), "Cannot wrap this :(")
             .into_compile_error()
-            .into();
+            .into()
     }
 }

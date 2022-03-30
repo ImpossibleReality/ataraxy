@@ -6,7 +6,6 @@
 
 pub mod framework;
 mod numbers;
-mod utils;
 
 pub use ataraxy_macros::command;
 pub use framework::Command;

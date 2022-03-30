@@ -1,6 +1,5 @@
 use ataraxy_macros::command_ide_arg_support;
 use serenity::builder::CreateApplicationCommandOption;
-use std::any::Any;
 
 use serenity::model::interactions::application_command::ApplicationCommandType;
 use serenity::model::interactions::InteractionType;
@@ -64,6 +63,7 @@ impl Framework {
             command_merging: CommandMergeMethod::Set,
         }
     }
+    
     /// Adds a command to the framework
     /// see [command!] for more details
     // Macro is for IDE support, since CLion freaks out without it
@@ -79,6 +79,12 @@ impl Framework {
     pub fn set_merge_method(mut self, method: CommandMergeMethod) -> Self {
         self.command_merging = method;
         self
+    }
+}
+
+impl Default for Framework {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -177,8 +183,8 @@ impl EventHandler for Framework {
 
                 let _commands = guild_id
                     .set_application_commands(&ctx.http, |commands| {
-                        let mut cmds = commands;
-                        for (_, command) in &self.commands {
+                        let cmds = commands;
+                        for command in self.commands.values() {
                             match command {
                                 ValidCommand::Command(command) => {
                                     cmds.create_application_command(|cmd| {
@@ -232,7 +238,7 @@ impl EventHandler for Framework {
                                                         }
                                                         c
                                                     }
-                                                }.clone()
+                                                }
                                             }).collect())
                                     });
                                 }
@@ -274,7 +280,7 @@ impl EventHandler for Framework {
                                     })
                                 })
                                 .collect();
-                            if let Err(_) = args {
+                            if args.is_err() {
                                 return;
                             }
                             command.action.0(context, &ArgumentList::new(args.unwrap())).await;
@@ -308,7 +314,7 @@ impl EventHandler for Framework {
                                                 })
                                                 .collect();
 
-                                            if let Err(_) = args {
+                                            if args.is_err() {
                                                 return;
                                             }
 
@@ -345,7 +351,7 @@ impl EventHandler for Framework {
                                                         })
                                                         .collect();
 
-                                                    if let Err(_) = args {
+                                                    if args.is_err() {
                                                         return;
                                                     }
 
