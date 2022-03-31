@@ -2,7 +2,10 @@
 name = "ataraxy-macros"
 version = "0.1.0"
 edition = "2018"
-authors = ["kangalioo <jannik.a.schaper@web.de>", "Impossible Reality <impossible@impreality.ml>"]
+authors = ["Impossible Reality <impossible@impreality.ml>"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/ImpossibleReality/ataraxy"
 
 [lib]
 proc-macro = true
