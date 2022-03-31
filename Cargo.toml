@@ -1,5 +1,6 @@
 [package]
 name = "ataraxy"
+description = "Discord slash commands framework for Serenity"
 version = "0.1.0"
 edition = "2018"
 authors = ["Impossible Reality <impossible@impreality.ml>"]
