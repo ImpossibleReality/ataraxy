@@ -1,4 +1,5 @@
-use crate::numbers::Integer;
+use crate::numbers::Number;
+use crate::numbers::NumberType;
 use crate::Context;
 use async_trait::async_trait;
 use core::marker::Sized;
@@ -392,9 +393,12 @@ impl AsCommandArgumentValue for String {
 }
 
 #[async_trait]
-impl<T: Integer> AsCommandArgumentValue for T {
+impl<T: Number> AsCommandArgumentValue for T {
     fn value_type() -> CommandArgumentValueType {
-        CommandArgumentValueType::Integer(T::MIN as f64, T::MAX as f64)
+        match T::number_type() {
+            NumberType::Integer => CommandArgumentValueType::Integer(T::MIN, T::MAX),
+            NumberType::Float => CommandArgumentValueType::Number(T::MIN, T::MAX),
+        }
     }
 
     async fn from_returned_argument(
@@ -402,13 +406,26 @@ impl<T: Integer> AsCommandArgumentValue for T {
         arg: Option<CommandArgumentValue>,
     ) -> Result<Self, ArgumentError> {
         if let Some(arg) = arg {
-            if let CommandArgumentValue::Integer(arg) = arg {
-                return Ok(T::from_i64(arg));
+            match T::number_type() {
+                NumberType::Integer => {
+                    if let CommandArgumentValue::Integer(arg) = arg {
+                        return Ok(T::from_f64(arg as f64));
+                    }
+                    return Err(IncorrectIncomingType(format!(
+                        "Expected integer, found: {}",
+                        arg
+                    )));
+                }
+                NumberType::Float => {
+                    if let CommandArgumentValue::Number(arg) = arg {
+                        return Ok(T::from_f64(arg));
+                    }
+                    return Err(IncorrectIncomingType(format!(
+                        "Expected number, found: {}",
+                        arg
+                    )));
+                }
             }
-            return Err(IncorrectIncomingType(format!(
-                "Expected integer, found: {}",
-                arg
-            )));
         }
         Err(IncomingArgumentNotProvided(
             "Required argument not provided".to_string(),
@@ -493,6 +510,34 @@ impl AsCommandArgumentValue for User {
             }
             return Err(IncorrectIncomingType(format!(
                 "Expected user, found: {}",
+                arg
+            )));
+        }
+        Err(IncomingArgumentNotProvided(
+            "Required argument not provided".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl AsCommandArgumentValue for RoleId {
+    fn value_type() -> CommandArgumentValueType {
+        CommandArgumentValueType::Role
+    }
+
+    async fn from_returned_argument(
+        _ctx: &Context,
+        arg: Option<CommandArgumentValue>,
+    ) -> Result<Self, ArgumentError>
+    where
+        Self: Sized,
+    {
+        if let Some(arg) = arg {
+            if let CommandArgumentValue::Role(arg) = arg {
+                return Ok(arg);
+            }
+            return Err(IncorrectIncomingType(format!(
+                "Expected role, found: {}",
                 arg
             )));
         }

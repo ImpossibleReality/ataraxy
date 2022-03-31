@@ -7,11 +7,8 @@ edition = "2018"
 
 [dependencies]
 serenity = { git = "https://github.com/serenity-rs/serenity", default-features=false, features = ["builder", "cache", "client", "gateway", "model", "unstable_discord_api"] }
-unsafe-any = "0.4.2"
 ataraxy-macros = { path = "./macros" }
-num-traits = "0.2"
 async-trait = "0.1"
-az = "1.2"
 
 [workspace]
 members = ["macros"]
