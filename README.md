@@ -1,5 +1,5 @@
 <p align="center">
-    <img src="images/ataraxy_title.png" alt="Ataraxy"/><br />
+    <img src="https://github.com/ImpossibleReality/ataraxy/blob/main/images/ataraxy_title.png?raw=true" alt="Ataraxy"/><br />
     <i>Discord slash commands framework for Serenity inspired by <code>Poise</code></i>
 </p>
 
