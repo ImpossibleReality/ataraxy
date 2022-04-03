@@ -1,8 +1,8 @@
 mod actions;
 mod params;
 
-use crate::utils::MacroError;
 use crate::utils::MacroError::*;
+use crate::utils::{quote_option, quote_vec, MacroError, Multiple};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
@@ -13,6 +13,7 @@ use syn::{FnArg, ItemFn, Meta};
 #[darling(default)]
 pub struct CommandArgs {
     name: Option<String>,
+    guild: Option<Multiple<u64>>,
     description: Option<String>,
 }
 
@@ -74,6 +75,8 @@ pub fn command(args: CommandArgs, function: ItemFn) -> Result<TokenStream, Macro
     let action =
         actions::create_slash_command_action(parameters.context, parameters.args.len() as u8);
 
+    let guilds = quote_option(&args.guild.map(|g| quote_vec(&g.0)));
+
     Ok(quote! {
         #visibility fn #func_name() -> ::ataraxy::Command {
             #inner_function
@@ -82,6 +85,7 @@ pub fn command(args: CommandArgs, function: ItemFn) -> Result<TokenStream, Macro
                 name: #name.to_string(),
                 description: #description.to_string(),
                 arguments: #signature,
+                guilds: #guilds,
                 action: ::ataraxy::framework::command::CommandHandler(#action),
             }
         }

@@ -9,22 +9,9 @@ use serenity::model::prelude::User;
 use serenity::Client;
 use std::env;
 
-/// Says "Hello world"
-#[command]
+/// Says "Hello world" Version 2
+#[command(guild(782428786229903380))]
 async fn say_hello(
-    ctx: Context,
-    #[option(channel_type = "text", description = "Text channel to say hello to")] channel: Channel,
-) {
-    channel
-        .id()
-        .send_message(&ctx.http(), |m| m.content("Hello, world!"))
-        .await;
-    ctx.reply_ephemeral("Sent message").await;
-}
-
-/// Says "Hello world"
-#[command]
-async fn other_say_hello(
     ctx: Context,
     #[option(channel_type = "text", description = "Text channel to say hello to")] channel: Channel,
 ) {
@@ -37,14 +24,6 @@ async fn other_say_hello(
 
 #[tokio::main]
 async fn main() {
-    let test_cmd = SubCommands::new("testing", "Amazing test thingy")
-        .command(say_hello)
-        .group(CommandGroup::new(
-            "others",
-            "Do other stuff",
-            [other_say_hello],
-        ));
-
     dotenv().ok();
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
     let application_id = env::var("APPLICATION_ID")
@@ -52,7 +31,7 @@ async fn main() {
         .parse()
         .unwrap();
 
-    let framework = Framework::new().command(test_cmd);
+    let framework = Framework::new().command(say_hello);
 
     let mut client = Client::builder(token)
         .event_handler(framework)

@@ -27,6 +27,7 @@ impl Debug for CommandHandler {
 pub struct Command {
     pub name: String,
     pub description: String,
+    pub guilds: Option<Vec<u64>>,
     pub arguments: CommandSignature,
     pub action: CommandHandler,
 }
