@@ -17,7 +17,7 @@ include = [
 
 [dependencies]
 serenity = { git = "https://github.com/serenity-rs/serenity", default-features=false, features = ["builder", "cache", "client", "gateway", "model", "unstable_discord_api"], version = "0.10" }
-ataraxy-macros = { path = "./macros", version = "0.1.0" }
+ataraxy-macros = { path = "./macros", version = "0.1.1" }
 async-trait = "0.1"
 
 [workspace]
